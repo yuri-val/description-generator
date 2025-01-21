@@ -14,9 +14,12 @@ SYSTEM_PROMPT = """
 Отримуючи характеристики товару у форматі "Свойство: Значение", ти повинен згенерувати опис, який привертає увагу покупців.
 """
 
-# Завантаження попередньо згенерованих повідомлень з файлу data.json
-with open("data.json", "r", encoding="utf-8") as f:
-    messages = json.load(f)
+# Завантаження базових повідомлень із файлу data.json
+try:
+    with open("data.json", "r", encoding="utf-8") as f:
+        BASE_MESSAGES = json.load(f)
+except FileNotFoundError:
+    BASE_MESSAGES = []
 
 
 @app.route("/generate-description", methods=["POST"])
@@ -33,10 +36,10 @@ def generate_description():
         if not parameters:
             return jsonify({"error": "Поле 'parameters' не може бути порожнім"}), 400
 
-        # Формуємо запит до моделі
+        # Локальна копія повідомлень
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}] + BASE_MESSAGES
 
-        messages.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
-
+        # Додаємо запит користувача
         messages.append(
             {
                 "role": "user",
@@ -44,8 +47,9 @@ def generate_description():
             }
         )
 
+        # Запит до моделі
         response = openai.chat.completions.create(
-            model="gpt-4o-mini",  # Можна замінити на GPT-4 або іншу модель
+            model="gpt-4o-mini",  # Замість "gpt-4o-mini" використовуйте доступну вам модель
             messages=messages,
             max_tokens=1000,
             temperature=0.7,
@@ -53,11 +57,12 @@ def generate_description():
 
         # Отримуємо відповідь
         description = response.choices[0].message.content
-        print(description)
         return jsonify({"description": description}), 200
 
+    except openai.error.OpenAIError as e:
+        return jsonify({"error": f"Помилка OpenAI: {str(e)}"}), 500
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Системна помилка: {str(e)}"}), 500
 
 
 if __name__ == "__main__":
